@@ -23,16 +23,17 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 				'methods'       => WP_REST_Server::READABLE,
 				'callback'      => array ( $this, 'get_items' ),
 				'permission_callback' => array( $this, 'get_items_permissions_check' ),
-				'args'          => $this->get_endpoint_args_for_item_schema(WP_REST_Server::CREATABLE),
+				'args'          => array( $this->get_collection_params() ),
 			),
 			array(
 				'methods'       => WP_REST_Server::CREATABLE,
 				'callback'      => array ( $this, 'create_item' ),
 				//'permission_callback' => array ($this, 'create_item_permissions_check' ),
-				'args'          => array( $this->get_collection_params() ),
+				'args'          => $this->get_endpoint_args_for_item_schema(WP_REST_Server::CREATABLE),
 			),
+			'schema' => array( $this, 'get_public_item_schema' ),
 		));
-		register_rest_route( $namespace, '/' . $base . '/(?P<id>[\d]+' , array(
+		register_rest_route( $namespace, '/' . $base . '/(?P<id>[\d]+)' , array(
 			array(
 				'methods'      => WP_REST_Server::EDITABLE,
 				'callback'     => array( $this, 'update_item' ),
@@ -49,6 +50,7 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 					),
 				),
 			),
+			'schema' => array( $this, 'get_public_item_schema' ),
 		));
 	}
 
@@ -88,7 +90,7 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 		if ( is_array( $data ) ) {
 			return new WP_REST_Response( $data, 201 );
 		} else {
-			return new WP_Error( 'not-updated', __('Something went wrong, check your data and try again', 'text-domain' ), array( 'status' => 500 ) );
+			return new WP_Error( 'not-updated', __('Something went wrong, check your data and try again', 'text-domain' ), array( 'status' => 500, 'item' => $item ,'data' => $data ) );
 		}
 	}
 
@@ -115,6 +117,11 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 		//global $wpdb;
 		//$table_name = $wpdb->prefix . 'visitordb';
 
+		if (isset($request[ 'id'] ) ) {
+			$id = sanitize_text_field( $request->get_param('id' ) );
+		} else {
+			$id = '';
+		}
 		if ( isset($request[ 'uuid' ] ) ) {
 			$visitor_uuid = sanitize_text_field( $request->get_param('uuid' ) );
 		} else {
@@ -187,6 +194,7 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 		}
 
 		$item = array(
+			'id' => $id,
 			'uuid' => $visitor_uuid,
 			'firstname' => $visitor_fname,
 			'lastname' => $visitor_lname,
@@ -298,13 +306,142 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 	public function get_item_schema() {
 		$schema = array(
 			'$schema'       => 'http://json-schema.org/draft-04/schema#',
-			'title'         => 'entry',
+			'title'         => 'visitor',
 			'type'          => 'object',
 			'properties'    => array(
 				'id' => array(
-					'description'   => __('The id for the visitor', 'visitordb' ),
+					'description'   => 'The id for the visitor',
 					'type'          => 'integer',
+					'context'       => array( 'view', 'edit', 'embed' ),
 					'readonly'      => 'true',
+				),
+				'uuid' => array(
+					'description'   => 'The universal id for the visitor',
+					'type'          => 'string',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+				'firstname' => array(
+					'description'   => 'Visitor first name',
+					'type'          => 'string',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+				'lastname' => array(
+					'description'   => 'Visitor last name',
+					'type'          => 'string',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+				'email' => array(
+					'description'   => 'Visitor email',
+					'type'          => 'string',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+				'timestamp' => array(
+					'description'   => 'Date and time when visitor was created',
+					'type'          => 'string',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'required'          => true,
+						'sanitize_callback' => 'sanitize_text_field',
+						'default'           => current_time( 'mysql' ),
+					),
+				),
+				'version' => array(
+					'description'   => 'Version of visitor. When updated, the version has to increment by 1',
+					'type'          => 'integer',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+				),
+				'isActive' => array(
+					'description'   => 'Flag that shows if a visitor is active or not',
+					'type'          => 'integer',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+						'default'           => 0,
+					),
+				),
+				'banned' => array(
+					'description'   => 'Flag that shows if a visitor is banned or not',
+					'type'          => 'integer',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+						'default'           => 0,
+					),
+				),
+				'birthdate' => array(
+					'description'   => 'Visitor birthdate',
+					'type'          => 'string',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'sanitize_callback' => 'sanitize_text_field',
+						'default'           => '1990-01-01',
+					),
+				),
+				'btw_nummer' => array(
+					'description'   => 'Visitor vta number',
+					'type'          => 'string',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'sanitize_callback' => 'sanitize_text_field',
+						'default'           => 'none',
+					),
+				),
+				'gsm_nummer' => array(
+					'description'   => 'Visitor telephone number',
+					'type'          => 'string',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'sanitize_callback' => 'sanitize_text_field',
+						'default'           => 'none',
+					),
+				),
+				'sender' => array(
+					'description'   => 'Which system sent the message',
+					'type'          => 'string',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'sanitize_callback' => 'sanitize_text_field',
+						'default'           => 'Front-end',
+					),
+				),
+				'gdpr' => array(
+					'description'   => 'Flag that shows if the visitor wants his data to be deleted from our database',
+					'type'          => 'integer',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'sanitize_callback' => 'sanitize_text_field',
+						'default'           => 0,
+					),
+				),
+				'extra' => array(
+					'description'   => 'Extra field',
+					'type'          => 'string',
+					'context'       => array( 'view', 'edit', 'embed' ),
+					'arg_options'   => array (
+						'sanitize_callback' => 'sanitize_text_field',
+						'default'           => null,
+					),
 				),
 			),
 		);
@@ -350,9 +487,9 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 		global $wpdb;
 		$table_name = $wpdb->prefix . 'visitordb';
 		$visitor_email = $item[ 'email' ];
-		$test = $wpdb->get_results( "SELECT * FROM $table_name WHERE email LIKE $visitor_email");
+		$test = $wpdb->get_results( "SELECT * FROM $table_name WHERE email = $visitor_email");
 
-		if( $test == [] ) {
+		if( is_array( $test ) ) {
 			$result = $wpdb->insert( $table_name, $item );
 			if ( $result != null ) {
 				return $item;
@@ -376,7 +513,7 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 			if ( $result ) {
 				return $item;
 			} else {
-				return new WP_Error( 'update-error', __( 'Visitor could not be updated. Check your data and try again.', 'visitordb' ), array( 'status' => 500 ) );
+				return new WP_Error( 'update-error', __( 'Visitor could not be updated. Check your data and try again.', 'visitordb' ), array( 'status' => 500, 'result' => $result, 'id' => $item['id'] ) );
 			}
 		} else {
 			return new WP_Error( 'not-exists', __( 'This visitor does not exists in the database.', 'visitordb' ), array( 'stauts' => 500 ) );
