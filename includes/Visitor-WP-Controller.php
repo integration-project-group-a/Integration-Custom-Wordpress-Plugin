@@ -23,13 +23,31 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 				'methods'       => WP_REST_Server::READABLE,
 				'callback'      => array ( $this, 'get_items' ),
 				'permission_callback' => array( $this, 'get_items_permissions_check' ),
-				'args'          => array ( $this->get_collection_params() ),
+				'args'          => $this->get_endpoint_args_for_item_schema(WP_REST_Server::CREATABLE),
 			),
 			array(
 				'methods'       => WP_REST_Server::CREATABLE,
 				'callback'      => array ( $this, 'create_item' ),
 				//'permission_callback' => array ($this, 'create_item_permissions_check' ),
 				'args'          => array( $this->get_collection_params() ),
+			),
+		));
+		register_rest_route( $namespace, '/' . $base . '/(?P<id>[\d]+' , array(
+			array(
+				'methods'      => WP_REST_Server::EDITABLE,
+				'callback'     => array( $this, 'update_item' ),
+				//'permission_callback' => array( $this, 'create_item_permissions_check' ),
+				'args'         => $this->get_endpoint_args_for_item_schema(WP_REST_Server::EDITABLE),
+			),
+			array(
+				'methods'       => WP_REST_Server::DELETABLE,
+				'callback'      => array ( $this, 'delete_item' ),
+				//'permission_callback' => array( $this, 'create_item_permission_check' ),
+				'args'          => array(
+					'force' => array(
+						'default' => false,
+					),
+				),
 			),
 		));
 	}
@@ -56,12 +74,33 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 			if ( is_array( $data ) ) {
 				return new WP_REST_Response( $data, 201 );
 			} else {
-				echo 'not created';
-				return $data;
+				return new WP_Error( 'cant-create', __( 'something went wrong, try again', 'text-domain' ), array( 'status' => 500 ) );
 			}
 		/*} else {
 			return new WP_Error( 'cant-create', __( 'something went wrong, try again', 'text-domain' ), array( 'status' => 500 ) );
 		}*/
+	}
+
+	public function update_item( $request ) {
+		$item = $this->prepare_item_for_database($request);
+
+		$data = $this->integration_update_visitor( $item );
+		if ( is_array( $data ) ) {
+			return new WP_REST_Response( $data, 201 );
+		} else {
+			return new WP_Error( 'not-updated', __('Something went wrong, check your data and try again', 'text-domain' ), array( 'status' => 500 ) );
+		}
+	}
+
+	public function delete_item( $request ) {
+		$item = $this->prepare_item_for_database( $request );
+
+		$deleted= $this->integration_delete_visitor( $item );
+		if ( $deleted == true ) {
+			return new WP_REST_Response( true, 200);
+		} else {
+			return new WP_Error( 'cant-delete', __( 'Something went wrong, check your data and try again', 'text-domain' ), array( 'status' => 500 ) );
+		}
 	}
 
 	public function get_items_permissions_check( $request ) {
@@ -76,6 +115,11 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 		//global $wpdb;
 		//$table_name = $wpdb->prefix . 'visitordb';
 
+		if ( isset($request[ 'uuid' ] ) ) {
+			$visitor_uuid = sanitize_text_field( $request->get_param('uuid' ) );
+		} else {
+			$visitor_uuid = null;
+		}
 		if ( isset( $request[ 'firstname' ] ) ) {
 			$visitor_fname = sanitize_text_field( $request->get_param('firstname' ) );
 		} else {
@@ -106,8 +150,23 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 		} else {
 			$is_active = 0;
 		}
-		if ( isset( $request[ 'gsm' ] ) ) {
-			$gsm = sanitize_text_field( $request->get_param('gsm' ) );
+		if ( isset( $request[ 'banned' ] ) ) {
+			$banned = sanitize_text_field( $request->get_param('banned' ) );
+		} else {
+			$banned = 0;
+		}
+		if ( isset( $request[ 'birthdate' ] ) ) {
+			$birthdate = sanitize_text_field( $request->get_param( 'birthdate' ) );
+		} else {
+			$birthdate = '1990-01-01';
+		}
+		if ( isset( $request[ 'btw_nummer' ] ) ) {
+			$btw = sanitize_text_field( $request->get_param('btw_nummer' ) );
+		} else {
+			$btw = "none";
+		}
+		if ( isset( $request[ 'gsm_nummer' ] ) ) {
+			$gsm = sanitize_text_field( $request->get_param('gsm_nummer' ) );
 		} else {
 			$gsm = "none";
 		}
@@ -121,23 +180,28 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 		} else {
 			$gdpr = 0;
 		}
-		if ( isset( $request[ 'banned' ] ) ) {
-			$banned = sanitize_text_field( $request->get_param('banned' ) );
+		if ( isset( $request[ 'extra' ] ) ) {
+			$extra = sanitize_text_field( $request->get_param('extra' ) );
 		} else {
-			$banned = 0;
+			$extra = null;
 		}
 
 		$item = array(
+			'uuid' => $visitor_uuid,
 			'firstname' => $visitor_fname,
 			'lastname' => $visitor_lname,
 			'email' => $email,
 			'timestamp' => $time,
 			'version' => $version,
 			'isActive' => $is_active,
-			'gsm' => $gsm,
+			'banned' => $banned,
+			'birthdate' => $birthdate,
+			'btw_nummer' => $btw,
+			'gsm_nummer' => $gsm,
 			'sender' => $sender,
 			'gdpr' => $gdpr,
-			'banned' => $banned,
+			'extra' => $extra,
+
 		);
 
 		return $item;
@@ -188,12 +252,27 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 				'type'              => 'integer',
 				'sanitize_callback' => 'absint',
 			),
+			'banned' => array(
+				'description'       => 'flag to detect if visitor is banned',
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+			),
 			'isActive' => array(
 				'description'       => 'Flag to see if visitor is active or not',
 				'type'              => 'string',
 				'sanitize_callback' => 'sanitize_text_field',
 			),
-			'gsm' => array(
+			'birthdate' => array(
+				'description'       => 'Birthday of visitor',
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+			),
+			'btw_nummer' => array(
+				'description'       => 'Optional tva number of visitor',
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+			),
+			'gsm_nummer' => array(
 				'description'       => 'telephone number of the visitor',
 				'type'              => 'string',
 				'sanitize_callback' => 'sanitize_text_field',
@@ -208,8 +287,8 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 				'type'              => 'string',
 				'sanitize_callback' => 'sanitize_text_field',
 			),
-			'banned' => array(
-				'description'       => 'flag to detect if visitor is banned',
+			'extra' => array(
+				'description'       => 'Extra field',
 				'type'              => 'string',
 				'sanitize_callback' => 'sanitize_text_field',
 			),
@@ -251,10 +330,14 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 				'timestamp' => $visitor->timestamp,
 				'version'   => $visitor->version,
 				'isActive'  => $visitor->isActive,
-				'gsm'       => $visitor->gsm,
+				'banned'    => $visitor->banned,
+				'birthdate' => $visitor->birthdate,
+				'btw_nummer'=> $visitor->btw_nummer,
+				'gsm_nummer'=> $visitor->gsm_nummer,
 				'sender'    => $visitor->sender,
 				'gdpr'      => $visitor->gdpr,
-				'banned'    => $visitor->banned,
+				'extra'     => $visitor->extra,
+
 			);
 			array_push( $visitor_list, $return_visitor );
 		}
@@ -271,8 +354,6 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 
 		if( $test == [] ) {
 			$result = $wpdb->insert( $table_name, $item );
-			//echo $wpdb-json_last_error();
-			//echo $result;
 			if ( $result != null ) {
 				return $item;
 			} else {
@@ -282,4 +363,42 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 			return new WP_Error( 'error_visitor_create2', __( 'This visitor already exists in the database.', 'visitordb' ), array( 'status' => 500 ) );
 		}
 	}
+
+	function integration_update_visitor( $item ) {
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'visitordb';
+
+		$visitor_id = $item[ 'id' ];
+		$test = $wpdb->get_results( "SELECT * FROM $table_name WHERE id = $visitor_id" );
+
+		if ( is_array( $test ) ) {
+			$result = $wpdb->update( $table_name, $item, array( 'id' => $item[ 'id' ] ) );
+			if ( $result ) {
+				return $item;
+			} else {
+				return new WP_Error( 'update-error', __( 'Visitor could not be updated. Check your data and try again.', 'visitordb' ), array( 'status' => 500 ) );
+			}
+		} else {
+			return new WP_Error( 'not-exists', __( 'This visitor does not exists in the database.', 'visitordb' ), array( 'stauts' => 500 ) );
+		}
+	}
+
+	function integration_delete_visitor( $item ) {
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'visitordb';
+
+		$visitor_id = $item[ 'id' ];
+		$test = $wpdb->get_results( "SELECT * FROM $table_name WHERE id = $visitor_id" );
+
+		if ( is_array( $test ) ) {
+			$result = $wpdb->delete( $table_name, array( 'id' => $visitor_id ), array( '%d' ));
+			if ( $result == false ) {
+				return new WP_Error( 'error-deletion', __( 'An error occured when deleting visitor, please check your data.', 'visitordb' ), array( 'status' => 500 ) );
+			} else {
+				return true;
+			}
+		} else {
+			return new WP_Error( 'not-exists', __( 'This visitor does not exists in the database.', 'visitordb' ), array( 'stauts' => 500 ) );
+		}
+}
 }

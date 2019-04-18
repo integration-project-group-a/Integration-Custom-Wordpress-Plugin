@@ -26,7 +26,7 @@ register_activation_hook(__FILE__, 'visitordb_install' );
 register_activation_hook( __FILE__, 'visitordb_install_data' );
 
 //Do these functions every time plugin is loaded
-add_action( 'plugins_loaded', 'visitordb_upgrade_check');
+//add_action( 'plugins_loaded', 'visitordb_upgrade_check');
 
 //Do these functions to make routes available
 add_action('rest_api_init', 'visitor_register_endpoints');

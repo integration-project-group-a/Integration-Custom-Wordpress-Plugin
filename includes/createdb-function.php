@@ -35,11 +35,14 @@ function visitordb_install () {
 		email varchar(50) NOT NULL,
 		timestamp datetime DEFAULT '00000-00-00 00:00:00' NOT NULL,
 		version int(10) NOT NULL,
-		isActive boolean DEFAULT 0,
-		gsm varchar(50) DEFAULT 'none', 
+		isActive boolean DEFAULT 0 NOT NULL,
+		banned boolean DEFAULT 0 NOT NULL,
+		birthdate date DEFAULT '1990-01-01',
+		btw_nummer varchar(70) DEFAULT 'none', 
+		gsm_nummer varchar(50) DEFAULT 'none', 
 		sender varchar(30) DEFAULT 'Front-end',
 		gdpr boolean DEFAULT 0,
-		banned boolean DEFAULT 0,
+		extra varchar(70),
 		PRIMARY KEY (id)
 
 	) $charset_collate;";
@@ -56,6 +59,7 @@ function visitordb_install () {
 	//Gebruik onderstande functie wanneer er geupdated moet.
 	//De aangepaste sql statement moet hier staan
 	//Laatste functie 'visitordb_upgrade_check' moet ook uit commen tworden gehaald
+/*
 	$installed_version = get_option( "visitor_db_version" );
 	if ($installed_version != $visitor_db_version) {
 		$sql = "CREATE TABLE " . $table_name . "(
@@ -66,11 +70,13 @@ function visitordb_install () {
 			email varchar(50) NOT NULL,
 			timestamp datetime DEFAULT '00000-00-00 00:00:00' NOT NULL,
 			version int(10) NOT NULL,
-			isActive boolean DEFAULT '0',
-			gsm varchar(50) DEFAULT 'none', 
+			isActive boolean DEFAULT 0 NOT NULL,
+			banned boolean DEFAULT 0 NOT NULL,
+			birthdate date DEFAULT '1990-01-01',
+			btw-nummer varchar(70) DEFAULT 'none',
+			gsm-nummer varchar(50) DEFAULT 'none',
 			sender varchar(30) DEFAULT 'Front-end',
-			gdpr boolean DEFAULT '0',
-			banned boolean DEFAULT '0',
+			gdpr boolean DEFAULT 0,
 			extra varchar(100),
 			PRIMARY KEY (id)
 		);";
@@ -80,7 +86,7 @@ function visitordb_install () {
 
 		update_option('visitor_db_version', $visitor_db_version);
 	};
-
+*/
 }
 
 
@@ -108,7 +114,7 @@ function visitordb_install_data() {
 
 //deze functie moet ook uit comment worden gehaald bij het updaten van de database
 //Deze functie zorgt ervoor dat, er bij een update, de bovenstaande code om tabel te updaten uitgevoerd wordt
-
+/*
 function visitordb_upgrade_check() {
 	global $visitor_db_version;
 	if (get_site_option('visitor_db_version') != $visitor_db_version) {
@@ -116,3 +122,4 @@ function visitordb_upgrade_check() {
 	}
 }
 add_action( 'plugins_loaded', 'visitordb_upgrade_check');
+*/
