@@ -35,6 +35,12 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 		));
 		register_rest_route( $namespace, '/' . $base . '/(?P<id>[\d]+)' , array(
 			array(
+				'methods'       => WP_REST_Server::READABLE,
+				'callback'      => array( $this, 'get_item' ),
+				'permission_callback' => array( $this, 'get_items_permissions_check' ),
+				'args'          => array( $this->get_collection_params() ),
+			),
+			array(
 				'methods'      => WP_REST_Server::EDITABLE,
 				'callback'     => array( $this, 'update_item' ),
 				//'permission_callback' => array( $this, 'create_item_permissions_check' ),
@@ -52,6 +58,10 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 			),
 			'schema' => array( $this, 'get_public_item_schema' ),
 		));
+		register_rest_route( $namespace, '/' . $base . '/schema', array(
+			'methods'           => WP_REST_Server::READABLE,
+			'callback'          => array( $this->get_public_item_schema() ),
+		));
 	}
 
 	public function get_items( $request ) {
@@ -65,6 +75,21 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 
 		return new WP_REST_Response( $data, 200 );
 
+	}
+
+	public function get_item( $request ) {
+
+		$item = $this->integration_get_visitor( $request );
+		$itemdata = $this->prepare_item_for_response( $item, $request );
+		$data = $this->prepare_response_for_collection( $itemdata );
+
+		if ( 1 == 1 ) {
+			return new WP_Error( 'cant-get', __('could not get the visitor', 'text-domain'), array( 'id' => $id, 'item' => $item) );
+			//return new WP_REST_Response( $data, 200 );
+
+		} else {
+			return new WP_Error( 'cant-get', __('could not get the visitor', 'text-domain') );
+		}
 	}
 
 	public function create_item( $request ) {
@@ -483,6 +508,34 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 		return $response;
 	}
 
+	function integration_get_visitor( $item ) {
+		global $wpdb;
+		$id = sanitize_text_field( $item->get_param('id' ) );
+		$table_name = $wpdb->prefix . 'visitordb';
+		$query      = "SELECT * FROM $table_name WHERE id = $id";
+		$visitor    = $wpdb->get_results( $query );
+
+		$response = array(
+			'id'         => $visitor->id,
+			'uuid'       => $visitor->uuid,
+			'firstname'  => $visitor->firstname,
+			'lastname'   => $visitor->lastname,
+			'email'      => $visitor->email,
+			'timestamp'  => $visitor->timestamp,
+			'version'    => $visitor->version,
+			'isActive'   => $visitor->isActive,
+			'banned'     => $visitor->banned,
+			'birthdate'  => $visitor->birthdate,
+			'btw_nummer' => $visitor->btw_nummer,
+			'gsm_nummer' => $visitor->gsm_nummer,
+			'sender'     => $visitor->sender,
+			'gdpr'       => $visitor->gdpr,
+			'extra'      => $visitor->extra,
+		);
+		return $response;
+	}
+
+
 	function integration_add_visitor( $item ) {
 		global $wpdb;
 		$table_name = $wpdb->prefix . 'visitordb';
@@ -537,5 +590,5 @@ class Visitor_REST_Controller extends WP_REST_Controller {
 		} else {
 			return new WP_Error( 'not-exists', __( 'This visitor does not exists in the database.', 'visitordb' ), array( 'stauts' => 500 ) );
 		}
-}
+	}
 }
